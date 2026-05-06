@@ -87,9 +87,20 @@ export function TierRules({ config, state, dispatch }: Props) {
           >
             <YesNo
               value={state.copayApplies}
-              onChange={(v) =>
-                dispatch({ type: "set", key: "copayApplies", value: v })
-              }
+              onChange={(v) => {
+                dispatch({ type: "set", key: "copayApplies", value: v });
+                // When copay does not apply, force-clear amount/rule. The
+                // dropdown otherwise lets staff pick "Copay before deductible"
+                // even though copayApplies=No, which is conceptual noise.
+                if (v === "no") {
+                  dispatch({ type: "set", key: "copayAmount", value: null });
+                  dispatch({
+                    type: "set",
+                    key: "copayRule",
+                    value: "no_copay" as CopayRule,
+                  });
+                }
+              }}
             />
           </Field>
           <Field label={effectiveLabel(config, "copay")}>
@@ -98,6 +109,7 @@ export function TierRules({ config, state, dispatch }: Props) {
               onChange={(v) =>
                 dispatch({ type: "set", key: "copayAmount", value: v })
               }
+              disabled={state.copayApplies === "no"}
             />
           </Field>
         </div>
@@ -107,10 +119,15 @@ export function TierRules({ config, state, dispatch }: Props) {
         <Field
           label={effectiveLabel(config, "copayRule")}
           required={fields.copayRule.required}
-          helpText="Do not infer this from the copay amount alone. Use what the payer says."
+          helpText={
+            state.copayApplies === "no"
+              ? "Copay does not apply to this visit, so the copay rule is locked to “No copay”."
+              : "Do not infer this from the copay amount alone. Use what the payer says."
+          }
         >
           <select
             value={state.copayRule ?? ""}
+            disabled={state.copayApplies === "no"}
             onChange={(e) =>
               dispatch({
                 type: "set",

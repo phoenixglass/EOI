@@ -223,6 +223,48 @@ describe("generateSnapshots — patient wording", () => {
     expect(out.staff).toContain("No dollar estimate generated");
   });
 
+  it("separate buckets: OOP met, service does not apply to OOP → patient still owes deductible", () => {
+    const cfg = loadConfig("public/config/default.json");
+    const state: FormState = {
+      ...makeInitialState(cfg),
+      networkStatus: "oon",
+      deductibleTotal: 2000,
+      deductibleMet: 0,
+      oopMaxTotal: 3500,
+      oopMet: 3500,
+      bucketStructure: "separate",
+      currentTierId: "office_visit",
+      deductibleApplies: "yes",
+      coinsuranceApplies: "yes",
+      coinsurancePercent: null,
+      copayApplies: "no",
+      copayRule: "no_copay",
+      estimatedAllowedAmount: 750,
+      estimateBasis: "allowed_amount",
+      serviceAppliesToDeductibleBucket: "yes",
+      serviceAppliesToOOPBucket: "no",
+    };
+    const out = generateSnapshots(cfg, state, FIXED_DATE);
+    expect(out.patient).toContain("Important bucket note:");
+    expect(out.patient).toContain(
+      "Your deductible and out-of-pocket maximum are tracked separately",
+    );
+    expect(out.patient).toContain("does not apply to your out-of-pocket maximum bucket");
+    expect(out.patient).toMatch(/Estimated amount you may owe.*\$750\.00/);
+    expect(out.patient).toContain(
+      "the full $750.00 would go toward your remaining deductible",
+    );
+    expect(out.patient).toContain(
+      "After this visit, your remaining deductible would be about $1,250.00",
+    );
+    expect(out.patient).toContain(
+      "missing coinsurance percentage does not affect this estimate",
+    );
+    // Should NOT claim OOP max limits the estimate or that the patient owes $0.
+    expect(out.patient).not.toContain("Estimated amount you may owe for this visit: $0.00");
+    expect(out.patient).not.toContain("limited to $0.00");
+  });
+
   it("uses copay-after-deductible: small visit fits inside deductible → patient pays full visit", () => {
     const cfg = loadConfig("public/config/default.json");
     const state: FormState = {

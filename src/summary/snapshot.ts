@@ -127,7 +127,39 @@ function coinsuranceLine(state: FormState): string {
   ) {
     return `After your deductible is met, your plan says you are responsible for ${p(state.coinsurancePercent)} of the allowed amount for this type of visit.`;
   }
-  return "Coinsurance applies, but no percentage was entered.";
+  return "Coinsurance applies after the deductible, but no coinsurance percentage was entered.";
+}
+
+function separateBucketNote(
+  state: FormState,
+  visitType: string,
+): string | null {
+  if (state.bucketStructure !== "separate") return null;
+
+  const lines: string[] = [];
+  lines.push(
+    "Your deductible and out-of-pocket maximum are tracked separately for this benefit.",
+  );
+
+  const dBucket = state.serviceAppliesToDeductibleBucket;
+  const oBucket = state.serviceAppliesToOOPBucket;
+  if (dBucket === "yes" && oBucket === "no") {
+    lines.push("");
+    lines.push(
+      `That means meeting your out-of-pocket maximum does not automatically mean this visit is covered at 100%. For this ${visitType.toLowerCase()}, the service applies to your deductible bucket but does not apply to your out-of-pocket maximum bucket.`,
+    );
+  } else if (dBucket === "no" && oBucket === "yes") {
+    lines.push("");
+    lines.push(
+      `For this ${visitType.toLowerCase()}, the service applies to your out-of-pocket maximum bucket but does not apply to your deductible bucket.`,
+    );
+  } else {
+    lines.push("");
+    lines.push(
+      "That means meeting your out-of-pocket maximum does not automatically mean this visit is covered at 100%.",
+    );
+  }
+  return lines.join("\n");
 }
 
 function whatThisMeans(
@@ -214,13 +246,24 @@ function estimateBlock(
     ) {
       lines.push("");
       lines.push(
-        `Of that amount, the full ${m(config, estimate.deductiblePortion)} would go toward your remaining deductible.`,
+        `Because your deductible has not been met yet, the full ${m(config, estimate.deductiblePortion)} would go toward your remaining deductible.`,
       );
       const remainingAfter =
         (estimate.deductibleRemaining ?? 0) - estimate.deductiblePortion;
+      lines.push("");
       lines.push(
         `After this visit, your remaining deductible would be about ${m(config, Math.max(remainingAfter, 0))}.`,
       );
+      if (
+        state.coinsuranceApplies === "yes" &&
+        (state.coinsurancePercent === null ||
+          !Number.isFinite(state.coinsurancePercent))
+      ) {
+        lines.push("");
+        lines.push(
+          "The missing coinsurance percentage does not affect this estimate because this visit does not exceed your remaining deductible. Coinsurance would only matter if the allowed amount were more than the deductible you have left.",
+        );
+      }
     } else {
       lines.push("");
       lines.push(
@@ -354,6 +397,13 @@ function generatePatientSnapshot(
     `You have ${m(config, estimate.oopRemaining ?? null)} left before reaching your maximum.`,
   );
   out.push("");
+
+  const bucketNote = separateBucketNote(state, visitType);
+  if (bucketNote) {
+    out.push("Important bucket note:");
+    out.push(bucketNote);
+    out.push("");
+  }
 
   out.push(`For this ${visitType.toLowerCase()}:`);
   out.push(deductibleHeadlineCfg(config, state, estimate));

@@ -6,9 +6,10 @@ interface Props {
   onChange: (v: number | null) => void;
   placeholder?: string;
   id?: string;
+  disabled?: boolean;
 }
 
-export function MoneyInput({ value, onChange, placeholder, id }: Props) {
+export function MoneyInput({ value, onChange, placeholder, id, disabled }: Props) {
   const [text, setText] = useState<string>(value === null ? "" : String(value));
 
   useEffect(() => {
@@ -22,6 +23,7 @@ export function MoneyInput({ value, onChange, placeholder, id }: Props) {
       inputMode="decimal"
       placeholder={placeholder ?? "0.00"}
       value={text}
+      disabled={disabled}
       onChange={(e) => {
         setText(e.target.value);
         onChange(parseMoney(e.target.value));

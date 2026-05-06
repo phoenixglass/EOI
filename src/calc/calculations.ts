@@ -179,8 +179,20 @@ function deductibleAppliesForService(state: FormState): boolean {
   return true;
 }
 
-function serviceAppliesToOOP(state: FormState): boolean {
-  return state.serviceAppliesToOOPBucket !== "no";
+// IMPORTANT: OOP max met is NOT a universal override.
+//
+// The OOP max only limits patient responsibility when ALL of the following are true:
+//   1. serviceAppliesToOOPBucket === "yes"
+//   2. oopRemaining is known (oopMaxTotal !== null)
+//   3. the service is covered and accumulates to that OOP bucket.
+//
+// If bucketStructure === "separate" AND serviceAppliesToOOPBucket === "no",
+// the OOP max must NOT cap the estimate, even if the patient has met the OOP max.
+// In that case, deductible logic still applies independently.
+export function oopCapCanApply(state: FormState): boolean {
+  return (
+    state.serviceAppliesToOOPBucket === "yes" && state.oopMaxTotal !== null
+  );
 }
 
 export interface EstimateResult {
@@ -252,11 +264,12 @@ export function calculateEstimate(state: FormState): EstimateResult {
   result.calculationBasisLabel = basis.calculationBasisLabel;
 
   // Step 2: OOP max override — patient owes $0 for covered services.
-  if (
-    state.oopMaxTotal !== null &&
-    result.oopMaxIsMet &&
-    serviceAppliesToOOP(state)
-  ) {
+  // ONLY applies when the service is explicitly tagged as applying to the OOP
+  // bucket. If bucketStructure === "separate" and the service does NOT apply to
+  // the OOP bucket, the patient may still owe deductible-based responsibility
+  // even when oopRemaining is $0.
+  const canCapByOop = oopCapCanApply(state);
+  if (canCapByOop && result.oopMaxIsMet) {
     result.oopMaxOverrideApplied = true;
     result.canEstimate = true;
     result.finalPatientEstimate = 0;
@@ -264,23 +277,16 @@ export function calculateEstimate(state: FormState): EstimateResult {
     return result;
   }
 
-  // Required-info gating for a confident dollar estimate.
+  // Required-info gating (everything except coinsurance percent, which depends
+  // on amountAfterDeductible and is checked below).
   if (result.calculationAmount === null) {
-    result.cannotEstimateReasons.push(
-      "no_dollar_basis",
-    );
+    result.cannotEstimateReasons.push("no_dollar_basis");
   }
   if (state.deductibleApplies === "unknown" || state.deductibleApplies === null) {
     result.cannotEstimateReasons.push("deductible_applicability_unknown");
   }
   if (state.copayApplies === "yes" && (state.copayRule === "unknown" || state.copayRule === null)) {
     result.cannotEstimateReasons.push("copay_rule_unknown");
-  }
-  if (
-    state.coinsuranceApplies === "yes" &&
-    (state.coinsurancePercent === null || !Number.isFinite(state.coinsurancePercent))
-  ) {
-    result.cannotEstimateReasons.push("coinsurance_percent_unknown");
   }
   if (state.coinsuranceApplies === "unknown" && state.copayRule !== "copay_only") {
     result.cannotEstimateReasons.push("coinsurance_applicability_unknown");
@@ -293,12 +299,13 @@ export function calculateEstimate(state: FormState): EstimateResult {
     result.cannotEstimateReasons.push("service_deductible_bucket_unknown");
   }
 
-  if (result.cannotEstimateReasons.length > 0 || result.calculationAmount === null) {
+  // Without a basis we cannot compute portions; bail with whatever reasons we have.
+  if (result.calculationAmount === null) {
     result.canEstimate = false;
     return result;
   }
 
-  const amount = result.calculationAmount as number;
+  const amount = result.calculationAmount;
 
   // Step 3: deductible portion.
   if (deductibleAppliesForService(state)) {
@@ -312,7 +319,23 @@ export function calculateEstimate(state: FormState): EstimateResult {
     result.amountAfterDeductible = amount;
   }
 
-  // Step 4: coinsurance.
+  // Step 4: coinsurance percent only matters when there is a portion left
+  // after the deductible. If amountAfterDeductible === 0, the entire visit
+  // falls within the remaining deductible and coinsurance is not needed.
+  const coinsurancePercentMissing =
+    state.coinsuranceApplies === "yes" &&
+    (state.coinsurancePercent === null ||
+      !Number.isFinite(state.coinsurancePercent));
+  if (coinsurancePercentMissing && result.amountAfterDeductible > 0) {
+    result.cannotEstimateReasons.push("coinsurance_percent_unknown");
+  }
+
+  if (result.cannotEstimateReasons.length > 0) {
+    result.canEstimate = false;
+    return result;
+  }
+
+  // Step 5: coinsurance.
   if (
     state.coinsuranceApplies === "yes" &&
     typeof state.coinsurancePercent === "number"
@@ -324,7 +347,7 @@ export function calculateEstimate(state: FormState): EstimateResult {
     result.coinsuranceAmount = 0;
   }
 
-  // Step 5/6: combine with copay rule.
+  // Step 6: combine with copay rule.
   const rule: CopayRule =
     state.copayRule ??
     (state.copayApplies === "yes" ? "unknown" : "no_copay");
@@ -406,11 +429,10 @@ export function calculateEstimate(state: FormState): EstimateResult {
   }
 
   // Step 7: cap by OOP remaining.
-  if (
-    serviceAppliesToOOP(state) &&
-    state.oopMaxTotal !== null &&
-    state.serviceAppliesToOOPBucket !== "unknown"
-  ) {
+  // Only apply the cap when the service explicitly applies to the OOP bucket
+  // and oopRemaining is known. Otherwise the OOP max does NOT limit the
+  // estimate (this is the separate-bucket case).
+  if (canCapByOop) {
     const remaining = nz(result.oopRemaining);
     if (result.patientResponsibilityBeforeOOP > remaining) {
       result.finalPatientEstimate = round2(remaining);
