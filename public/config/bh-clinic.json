@@ -5,8 +5,9 @@
     "facilityName": "Northwood Behavioral Health",
     "primaryColor": "#2c5282",
     "accentColor": "#2b6cb0",
+    "billingPhone": "(555) 555-1212",
     "contactLine": "Billing: (555) 555-1212",
-    "footerDisclaimer": "This is an estimate of benefits, not a guarantee of coverage or payment."
+    "footerDisclaimer": "This is an estimate of benefits, not a guarantee of payment. Final amounts depend on your insurance company's processing of the claim, including what they allow, what they consider covered, and any plan limits."
   },
   "vocabulary": {
     "patientNoun": "client",
@@ -17,7 +18,8 @@
     { "id": "op", "label": "Outpatient (OP)" },
     { "id": "iop", "label": "Intensive Outpatient (IOP)" },
     { "id": "php", "label": "Partial Hospitalization (PHP)" },
-    { "id": "rtc", "label": "Residential (RTC)" }
+    { "id": "rtc", "label": "Residential (RTC)" },
+    { "id": "detox", "label": "Detox" }
   ],
   "statusOptions": [
     { "id": "not_admitted", "label": "Not yet admitted" },
@@ -42,15 +44,21 @@
     "network": { "enabled": true, "required": true },
     "deductible": { "enabled": true, "required": true },
     "oopMax": { "enabled": true, "required": true },
-    "deductibleOopStructure": { "enabled": true, "required": true },
+    "bucketStructure": { "enabled": true, "required": true },
     "patientStatus": { "enabled": true, "required": true },
     "currentTier": { "enabled": true, "required": true },
     "verifiedTier": { "enabled": true },
     "deductibleApplies": { "enabled": true, "required": true },
     "coinsurance": { "enabled": true },
     "copay": { "enabled": true },
+    "copayRule": { "enabled": true },
+    "estimateBasis": { "enabled": true },
+    "serviceBucketApplicability": { "enabled": true },
     "priorActivity": { "enabled": true },
     "currentBalance": { "enabled": true }
+  },
+  "sections": {
+    "estimateBasis": { "enabled": true }
   },
   "finalCheck": [
     { "id": "ded_oop_reviewed", "label": "Deductible and OOP reviewed" },
@@ -61,10 +69,6 @@
       "label": "Episode financial activity reviewed"
     }
   ],
-  "templates": {
-    "staffSummary": "STAFF SUMMARY — {{facility.facilityName}}\nGenerated {{generatedAt}}\n\n{{t.patientNoun}} status: {{form.patientStatus.label}}\nNetwork: {{form.network}}\n\nDeductible: {{money form.deductibleTotal}} total / {{money form.deductibleMet}} met / {{money form.deductibleRemaining}} remaining\nOOP max:    {{money form.oopMaxTotal}} total / {{money form.oopMet}} met / {{money form.oopRemaining}} remaining\nStructure:  {{form.deductibleOopStructure}}\n\nCurrent LOC: {{form.currentTier.label}}\n{{#if form.verifiedTier}}Verified LOC: {{form.verifiedTier.label}}\n{{/if}}{{#if form.crossTierWarning}}** Cross-LOC mismatch — verify before billing **\n{{/if}}\nDeductible applies: {{form.deductibleApplies}}\nCoinsurance: {{pct form.coinsurancePercent}}\nCopay: {{money form.copayAmount}}\n\nEpisode activity:\n{{#each form.activities}}- {{this.tierLabel}} | patient {{money this.clientPayment}} | assist {{money this.assistance}} ({{this.assistanceType}}){{#if this.countsTowardOop}} [OOP]{{/if}}{{#if this.countsTowardDeductible}} [DED]{{/if}} {{this.notes}}\n{{/each}}Total payments to OOP: {{money form.totalPaymentsToOop}}\nTotal assistance to OOP: {{money form.totalAssistanceToOop}}\nTotal episode activity to OOP: {{money form.totalEpisodeActivityToOop}}\n{{#if form.oopSatisfied}}** OOP MAX SATISFIED **\n{{/if}}{{#if form.currentBalance}}Current balance: {{money form.currentBalance}}\n{{/if}}",
-    "patientExplanation": "{{facility.facilityName}}\nGenerated {{generatedAt}}\n\nHi — here's a quick summary of your insurance for this {{t.episodeNoun}}.\n\nYour plan ({{form.network}}):\n- Deductible: {{money form.deductibleTotal}} total, {{money form.deductibleRemaining}} left to meet\n- Out-of-pocket max: {{money form.oopMaxTotal}} total, {{money form.oopRemaining}} left\n\n{{#if form.currentTier}}For your {{t.serviceNoun}} ({{form.currentTier.label}}):\n{{/if}}{{#if form.deductibleApplies}}- Deductible applies: {{form.deductibleApplies}}\n{{/if}}{{#if form.coinsurancePercent}}- Your share after deductible: {{pct form.coinsurancePercent}}\n{{/if}}{{#if form.copayAmount}}- Copay: {{money form.copayAmount}} per {{t.episodeNoun}}\n{{/if}}\n{{#if form.oopSatisfied}}You've met your out-of-pocket max for the year — covered services should be paid at 100% by your plan.\n{{/if}}\n---\n{{facility.footerDisclaimer}}\n{{#if facility.contactLine}}{{facility.contactLine}}{{/if}}\n"
-  },
   "behavior": {
     "idleClearMinutes": 15
   }

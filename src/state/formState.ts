@@ -1,7 +1,24 @@
 import type { FacilityConfig } from "../config/schema";
 
-export type DeductibleApplies = "yes" | "no" | "unknown";
-export type DeductibleOopStructure = "combined" | "separate";
+export type TriState = "yes" | "no" | "unknown";
+export type DeductibleApplies = TriState;
+export type DeductibleOopStructure = "combined" | "separate" | "unknown";
+export type NetworkStatus = "inn" | "oon" | "unknown";
+
+export type CopayRule =
+  | "no_copay"
+  | "copay_only"
+  | "copay_before_deductible"
+  | "copay_after_deductible"
+  | "copay_plus_coinsurance"
+  | "copay_instead_of_coinsurance"
+  | "unknown";
+
+export type EstimateBasis =
+  | "allowed_amount"
+  | "provider_charge"
+  | "usual_allowed_estimate"
+  | "no_dollar_estimate";
 
 export interface ActivityEntry {
   id: string;
@@ -15,18 +32,32 @@ export interface ActivityEntry {
 }
 
 export interface FormState {
-  network: string;
+  networkStatus: NetworkStatus | null;
   deductibleTotal: number | null;
   deductibleMet: number | null;
   oopMaxTotal: number | null;
   oopMet: number | null;
-  deductibleOopStructure: DeductibleOopStructure | null;
+  bucketStructure: DeductibleOopStructure | null;
   patientStatusId: string;
   currentTierId: string;
   verifiedTierId: string;
-  deductibleApplies: DeductibleApplies | null;
+
+  deductibleApplies: TriState | null;
+
+  coinsuranceApplies: TriState | null;
   coinsurancePercent: number | null;
+
+  copayApplies: TriState | null;
   copayAmount: number | null;
+  copayRule: CopayRule | null;
+
+  estimatedProviderCharge: number | null;
+  estimatedAllowedAmount: number | null;
+  estimateBasis: EstimateBasis | null;
+
+  serviceAppliesToDeductibleBucket: TriState | null;
+  serviceAppliesToOOPBucket: TriState | null;
+
   activities: ActivityEntry[];
   currentBalance: number | null;
   finalCheck: Record<string, boolean>;
@@ -43,18 +74,26 @@ export type FormAction =
 
 export function makeInitialState(_config: FacilityConfig): FormState {
   return {
-    network: "",
+    networkStatus: null,
     deductibleTotal: null,
     deductibleMet: null,
     oopMaxTotal: null,
     oopMet: null,
-    deductibleOopStructure: null,
+    bucketStructure: null,
     patientStatusId: "",
     currentTierId: "",
     verifiedTierId: "",
     deductibleApplies: null,
+    coinsuranceApplies: null,
     coinsurancePercent: null,
+    copayApplies: null,
     copayAmount: null,
+    copayRule: null,
+    estimatedProviderCharge: null,
+    estimatedAllowedAmount: null,
+    estimateBasis: null,
+    serviceAppliesToDeductibleBucket: null,
+    serviceAppliesToOOPBucket: null,
     activities: [],
     currentBalance: null,
     finalCheck: {},
@@ -94,6 +133,9 @@ export function formReducer(state: FormState, action: FormAction): FormState {
         coinsurancePercent:
           d.coinsurancePercent ?? state.coinsurancePercent,
         copayAmount: d.copayAmount ?? state.copayAmount,
+        copayRule: d.copayRule ?? state.copayRule,
+        coinsuranceApplies: d.coinsuranceApplies ?? state.coinsuranceApplies,
+        copayApplies: d.copayApplies ?? state.copayApplies,
       };
     }
     case "reset":

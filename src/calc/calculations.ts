@@ -1,4 +1,9 @@
-import type { ActivityEntry, FormState } from "../state/formState";
+import type {
+  ActivityEntry,
+  CopayRule,
+  FormState,
+  TriState,
+} from "../state/formState";
 
 export interface ComputedFinancials {
   deductibleRemaining: number | null;
@@ -115,4 +120,308 @@ export function formatMoney(
 export function formatPercent(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "—";
   return `${value}%`;
+}
+
+// ---------------------------------------------------------------------------
+// Patient estimate engine
+// ---------------------------------------------------------------------------
+
+export interface CalculationBasis {
+  calculationAmount: number | null;
+  calculationBasisLabel: string | null;
+}
+
+export function getCalculationBasis(state: FormState): CalculationBasis {
+  const allowed = state.estimatedAllowedAmount;
+  const charge = state.estimatedProviderCharge;
+  const basis = state.estimateBasis;
+
+  if (typeof allowed === "number" && Number.isFinite(allowed)) {
+    return {
+      calculationAmount: round2(allowed),
+      calculationBasisLabel: "estimated allowed amount",
+    };
+  }
+  if (
+    basis === "provider_charge" &&
+    typeof charge === "number" &&
+    Number.isFinite(charge)
+  ) {
+    return {
+      calculationAmount: round2(charge),
+      calculationBasisLabel: "provider charge",
+    };
+  }
+  if (
+    basis === "usual_allowed_estimate" &&
+    typeof charge === "number" &&
+    Number.isFinite(charge)
+  ) {
+    return {
+      calculationAmount: round2(charge),
+      calculationBasisLabel: "usual allowed estimate",
+    };
+  }
+  return { calculationAmount: null, calculationBasisLabel: null };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function applies(v: TriState | null | undefined): boolean {
+  return v === "yes";
+}
+
+function deductibleAppliesForService(state: FormState): boolean {
+  if (!applies(state.deductibleApplies)) return false;
+  if (state.serviceAppliesToDeductibleBucket === "no") return false;
+  return true;
+}
+
+function serviceAppliesToOOP(state: FormState): boolean {
+  return state.serviceAppliesToOOPBucket !== "no";
+}
+
+export interface EstimateResult {
+  // Inputs / derived plan numbers.
+  deductibleRemaining: number | null;
+  oopRemaining: number | null;
+  deductibleIsMet: boolean;
+  oopMaxIsMet: boolean;
+
+  // Basis used for the calculation.
+  calculationAmount: number | null;
+  calculationBasisLabel: string | null;
+
+  // Math outputs.
+  deductiblePortion: number;
+  amountAfterDeductible: number;
+  coinsuranceAmount: number;
+  copayAmountUsed: number;
+  patientResponsibilityBeforeOOP: number;
+  finalPatientEstimate: number;
+  oopCapApplied: boolean;
+
+  // Result classification.
+  canEstimate: boolean;
+  cannotEstimateReasons: string[];
+
+  // Special outcomes.
+  oopMaxOverrideApplied: boolean;
+}
+
+const EMPTY: EstimateResult = {
+  deductibleRemaining: null,
+  oopRemaining: null,
+  deductibleIsMet: false,
+  oopMaxIsMet: false,
+  calculationAmount: null,
+  calculationBasisLabel: null,
+  deductiblePortion: 0,
+  amountAfterDeductible: 0,
+  coinsuranceAmount: 0,
+  copayAmountUsed: 0,
+  patientResponsibilityBeforeOOP: 0,
+  finalPatientEstimate: 0,
+  oopCapApplied: false,
+  canEstimate: false,
+  cannotEstimateReasons: [],
+  oopMaxOverrideApplied: false,
+};
+
+export function calculateEstimate(state: FormState): EstimateResult {
+  const result: EstimateResult = { ...EMPTY, cannotEstimateReasons: [] };
+
+  result.deductibleRemaining =
+    state.deductibleTotal !== null
+      ? Math.max(state.deductibleTotal - nz(state.deductibleMet), 0)
+      : null;
+  result.oopRemaining =
+    state.oopMaxTotal !== null
+      ? Math.max(state.oopMaxTotal - nz(state.oopMet), 0)
+      : null;
+  result.deductibleIsMet =
+    result.deductibleRemaining !== null && result.deductibleRemaining <= 0;
+  result.oopMaxIsMet =
+    result.oopRemaining !== null && result.oopRemaining <= 0;
+
+  // Step 1: calculation basis.
+  const basis = getCalculationBasis(state);
+  result.calculationAmount = basis.calculationAmount;
+  result.calculationBasisLabel = basis.calculationBasisLabel;
+
+  // Step 2: OOP max override — patient owes $0 for covered services.
+  if (
+    state.oopMaxTotal !== null &&
+    result.oopMaxIsMet &&
+    serviceAppliesToOOP(state)
+  ) {
+    result.oopMaxOverrideApplied = true;
+    result.canEstimate = true;
+    result.finalPatientEstimate = 0;
+    result.patientResponsibilityBeforeOOP = 0;
+    return result;
+  }
+
+  // Required-info gating for a confident dollar estimate.
+  if (result.calculationAmount === null) {
+    result.cannotEstimateReasons.push(
+      "no_dollar_basis",
+    );
+  }
+  if (state.deductibleApplies === "unknown" || state.deductibleApplies === null) {
+    result.cannotEstimateReasons.push("deductible_applicability_unknown");
+  }
+  if (state.copayApplies === "yes" && (state.copayRule === "unknown" || state.copayRule === null)) {
+    result.cannotEstimateReasons.push("copay_rule_unknown");
+  }
+  if (
+    state.coinsuranceApplies === "yes" &&
+    (state.coinsurancePercent === null || !Number.isFinite(state.coinsurancePercent))
+  ) {
+    result.cannotEstimateReasons.push("coinsurance_percent_unknown");
+  }
+  if (state.coinsuranceApplies === "unknown" && state.copayRule !== "copay_only") {
+    result.cannotEstimateReasons.push("coinsurance_applicability_unknown");
+  }
+  if (
+    state.bucketStructure !== "combined" &&
+    state.serviceAppliesToDeductibleBucket === "unknown" &&
+    applies(state.deductibleApplies)
+  ) {
+    result.cannotEstimateReasons.push("service_deductible_bucket_unknown");
+  }
+
+  if (result.cannotEstimateReasons.length > 0 || result.calculationAmount === null) {
+    result.canEstimate = false;
+    return result;
+  }
+
+  const amount = result.calculationAmount as number;
+
+  // Step 3: deductible portion.
+  if (deductibleAppliesForService(state)) {
+    const remaining = nz(result.deductibleRemaining);
+    result.deductiblePortion = round2(Math.min(amount, remaining));
+    result.amountAfterDeductible = round2(
+      Math.max(amount - result.deductiblePortion, 0),
+    );
+  } else {
+    result.deductiblePortion = 0;
+    result.amountAfterDeductible = amount;
+  }
+
+  // Step 4: coinsurance.
+  if (
+    state.coinsuranceApplies === "yes" &&
+    typeof state.coinsurancePercent === "number"
+  ) {
+    result.coinsuranceAmount = round2(
+      result.amountAfterDeductible * (state.coinsurancePercent / 100),
+    );
+  } else {
+    result.coinsuranceAmount = 0;
+  }
+
+  // Step 5/6: combine with copay rule.
+  const rule: CopayRule =
+    state.copayRule ??
+    (state.copayApplies === "yes" ? "unknown" : "no_copay");
+  const copay = nz(state.copayAmount);
+
+  switch (rule) {
+    case "no_copay": {
+      result.copayAmountUsed = 0;
+      result.patientResponsibilityBeforeOOP = round2(
+        result.deductiblePortion + result.coinsuranceAmount,
+      );
+      break;
+    }
+    case "copay_only": {
+      result.copayAmountUsed = copay;
+      result.coinsuranceAmount = 0;
+      result.deductiblePortion = 0;
+      result.amountAfterDeductible = amount;
+      result.patientResponsibilityBeforeOOP = round2(copay);
+      break;
+    }
+    case "copay_before_deductible": {
+      result.copayAmountUsed = copay;
+      result.patientResponsibilityBeforeOOP = round2(
+        copay + result.deductiblePortion + result.coinsuranceAmount,
+      );
+      break;
+    }
+    case "copay_after_deductible": {
+      result.copayAmountUsed = copay;
+      if (deductibleAppliesForService(state) && !result.deductibleIsMet) {
+        const remaining = nz(result.deductibleRemaining);
+        if (amount <= remaining) {
+          result.patientResponsibilityBeforeOOP = round2(amount);
+        } else {
+          result.patientResponsibilityBeforeOOP = round2(
+            result.deductiblePortion + copay,
+          );
+          // Coinsurance does not stack here; copay-after-deductible substitutes.
+          result.coinsuranceAmount = 0;
+        }
+      } else {
+        result.patientResponsibilityBeforeOOP = round2(copay);
+        result.coinsuranceAmount = 0;
+      }
+      break;
+    }
+    case "copay_plus_coinsurance": {
+      result.copayAmountUsed = copay;
+      result.patientResponsibilityBeforeOOP = round2(
+        copay + result.deductiblePortion + result.coinsuranceAmount,
+      );
+      break;
+    }
+    case "copay_instead_of_coinsurance": {
+      result.copayAmountUsed = copay;
+      result.coinsuranceAmount = 0;
+      if (deductibleAppliesForService(state) && !result.deductibleIsMet) {
+        if (result.amountAfterDeductible > 0) {
+          result.patientResponsibilityBeforeOOP = round2(
+            result.deductiblePortion + copay,
+          );
+        } else {
+          result.patientResponsibilityBeforeOOP = round2(
+            result.deductiblePortion,
+          );
+        }
+      } else {
+        result.patientResponsibilityBeforeOOP = round2(copay);
+      }
+      break;
+    }
+    case "unknown":
+    default: {
+      result.cannotEstimateReasons.push("copay_rule_unknown");
+      result.canEstimate = false;
+      return result;
+    }
+  }
+
+  // Step 7: cap by OOP remaining.
+  if (
+    serviceAppliesToOOP(state) &&
+    state.oopMaxTotal !== null &&
+    state.serviceAppliesToOOPBucket !== "unknown"
+  ) {
+    const remaining = nz(result.oopRemaining);
+    if (result.patientResponsibilityBeforeOOP > remaining) {
+      result.finalPatientEstimate = round2(remaining);
+      result.oopCapApplied = true;
+    } else {
+      result.finalPatientEstimate = result.patientResponsibilityBeforeOOP;
+    }
+  } else {
+    result.finalPatientEstimate = result.patientResponsibilityBeforeOOP;
+  }
+
+  result.canEstimate = true;
+  return result;
 }

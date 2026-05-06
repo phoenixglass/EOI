@@ -6,6 +6,7 @@ import { Header } from "./components/Header";
 import { PlanBasics } from "./sections/PlanBasics";
 import { ServiceTier } from "./sections/ServiceTier";
 import { TierRules } from "./sections/TierRules";
+import { EstimateBasis } from "./sections/EstimateBasis";
 import { FinancialActivity } from "./sections/FinancialActivity";
 import { FinalCheck } from "./sections/FinalCheck";
 import { renderSummaries } from "./summary/render";
@@ -152,6 +153,9 @@ function Configured({ config }: { config: FacilityConfig }) {
       )}
       {sections.tierRules.enabled && (
         <TierRules config={config} state={state} dispatch={dispatch} />
+      )}
+      {sections.estimateBasis.enabled && (
+        <EstimateBasis config={config} state={state} dispatch={dispatch} />
       )}
       {sections.financialActivity.enabled && (
         <FinancialActivity config={config} state={state} dispatch={dispatch} />

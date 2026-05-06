@@ -1,6 +1,11 @@
 import type { Dispatch } from "react";
 import type { FacilityConfig } from "../config/schema";
-import type { FormAction, FormState } from "../state/formState";
+import type {
+  DeductibleOopStructure,
+  FormAction,
+  FormState,
+  NetworkStatus,
+} from "../state/formState";
 import { Section } from "../components/Section";
 import { Field } from "../components/Field";
 import { MoneyInput } from "../components/MoneyInput";
@@ -21,7 +26,7 @@ export function PlanBasics({ config, state, dispatch }: Props) {
     "network",
     "deductible",
     "oopMax",
-    "deductibleOopStructure",
+    "bucketStructure",
   ]);
 
   return (
@@ -32,14 +37,24 @@ export function PlanBasics({ config, state, dispatch }: Props) {
           required={fields.network.required}
           helpText={fieldMeta(config, "network").helpText}
         >
-          <input
-            type="text"
-            value={state.network}
+          <select
+            value={state.networkStatus ?? ""}
             onChange={(e) =>
-              dispatch({ type: "set", key: "network", value: e.target.value })
+              dispatch({
+                type: "set",
+                key: "networkStatus",
+                value:
+                  e.target.value === ""
+                    ? null
+                    : (e.target.value as NetworkStatus),
+              })
             }
-            placeholder="In-network / Out-of-network / etc."
-          />
+          >
+            <option value="">— select —</option>
+            <option value="inn">In-network</option>
+            <option value="oon">Out-of-network</option>
+            <option value="unknown">Unknown</option>
+          </select>
         </Field>
       )}
 
@@ -91,28 +106,29 @@ export function PlanBasics({ config, state, dispatch }: Props) {
         </div>
       )}
 
-      {fields.deductibleOopStructure.enabled && (
+      {fields.bucketStructure.enabled && (
         <Field
-          label={effectiveLabel(config, "deductibleOopStructure")}
-          required={fields.deductibleOopStructure.required}
-          helpText="Whether the deductible and OOP max share a single bucket or are separate."
+          label={effectiveLabel(config, "bucketStructure")}
+          required={fields.bucketStructure.required}
+          helpText="Whether the deductible and OOP max share a single bucket or are tracked separately."
         >
           <select
-            value={state.deductibleOopStructure ?? ""}
+            value={state.bucketStructure ?? ""}
             onChange={(e) =>
               dispatch({
                 type: "set",
-                key: "deductibleOopStructure",
+                key: "bucketStructure",
                 value:
                   e.target.value === ""
                     ? null
-                    : (e.target.value as "combined" | "separate"),
+                    : (e.target.value as DeductibleOopStructure),
               })
             }
           >
             <option value="">— select —</option>
             <option value="combined">Combined</option>
             <option value="separate">Separate</option>
+            <option value="unknown">Unknown</option>
           </select>
         </Field>
       )}
