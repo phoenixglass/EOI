@@ -10,10 +10,11 @@ const Branding = z.object({
   primaryColor: HexColor.default("#2c5282"),
   accentColor: HexColor.default("#2b6cb0"),
   contactLine: z.string().optional(),
+  billingPhone: z.string().optional(),
   footerDisclaimer: z
     .string()
     .default(
-      "This is an estimate of benefits, not a guarantee of coverage or payment.",
+      "This is an estimate of benefits, not a guarantee of payment. Final amounts depend on your insurance company's processing of the claim, including what they allow, what they consider covered, and any plan limits.",
     ),
 });
 
@@ -34,6 +35,16 @@ const Vocabulary = z
   })
   .default({});
 
+const CopayRuleEnum = z.enum([
+  "no_copay",
+  "copay_only",
+  "copay_before_deductible",
+  "copay_after_deductible",
+  "copay_plus_coinsurance",
+  "copay_instead_of_coinsurance",
+  "unknown",
+]);
+
 const ServiceTier = z.object({
   id: Slug,
   label: NonEmpty,
@@ -41,8 +52,11 @@ const ServiceTier = z.object({
   defaults: z
     .object({
       deductibleApplies: z.enum(["yes", "no", "unknown"]).optional(),
+      coinsuranceApplies: z.enum(["yes", "no", "unknown"]).optional(),
       coinsurancePercent: z.number().min(0).max(100).optional(),
+      copayApplies: z.enum(["yes", "no", "unknown"]).optional(),
       copayAmount: z.number().min(0).optional(),
+      copayRule: CopayRuleEnum.optional(),
     })
     .partial()
     .optional(),
@@ -60,13 +74,16 @@ const Fields = z
     network: FieldToggle.default({}),
     deductible: FieldToggle.default({}),
     oopMax: FieldToggle.default({}),
-    deductibleOopStructure: FieldToggle.default({}),
+    bucketStructure: FieldToggle.default({}),
     patientStatus: FieldToggle.default({}),
     currentTier: FieldToggle.default({}),
     verifiedTier: FieldToggle.default({}),
     deductibleApplies: FieldToggle.default({}),
     coinsurance: FieldToggle.default({}),
     copay: FieldToggle.default({}),
+    copayRule: FieldToggle.default({}),
+    estimateBasis: FieldToggle.default({}),
+    serviceBucketApplicability: FieldToggle.default({}),
     priorActivity: FieldToggle.default({}),
     currentBalance: FieldToggle.default({}),
   })
@@ -82,6 +99,7 @@ const Sections = z
     planBasics: SectionToggle.default({}),
     serviceTier: SectionToggle.default({}),
     tierRules: SectionToggle.default({}),
+    estimateBasis: SectionToggle.default({}),
     financialActivity: SectionToggle.default({}),
     finalCheck: SectionToggle.default({}),
   })
@@ -103,11 +121,6 @@ const ChecklistItem = z.object({
   id: Slug,
   label: NonEmpty,
   required: z.boolean().default(true),
-});
-
-const Templates = z.object({
-  staffSummary: z.string(),
-  patientExplanation: z.string(),
 });
 
 const Behavior = z
@@ -134,7 +147,6 @@ export const FacilityConfig = z.object({
   fields: Fields,
   sections: Sections,
   finalCheck: z.array(ChecklistItem).default([]),
-  templates: Templates,
   behavior: Behavior,
 });
 

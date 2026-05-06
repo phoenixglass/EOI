@@ -1,6 +1,11 @@
 import type { Dispatch } from "react";
 import type { FacilityConfig } from "../config/schema";
-import type { FormAction, FormState } from "../state/formState";
+import type {
+  CopayRule,
+  FormAction,
+  FormState,
+  TriState,
+} from "../state/formState";
 import { Section } from "../components/Section";
 import { Field } from "../components/Field";
 import { MoneyInput } from "../components/MoneyInput";
@@ -22,6 +27,8 @@ export function TierRules({ config, state, dispatch }: Props) {
     "deductibleApplies",
     "coinsurance",
     "copay",
+    "copayRule",
+    "serviceBucketApplicability",
   ]);
 
   return (
@@ -40,12 +47,20 @@ export function TierRules({ config, state, dispatch }: Props) {
         </Field>
       )}
 
-      <div className="row">
-        {fields.coinsurance.enabled && (
+      {fields.coinsurance.enabled && (
+        <div className="row">
           <Field
-            label={effectiveLabel(config, "coinsurance")}
+            label="Coinsurance applies?"
             required={fields.coinsurance.required}
           >
+            <YesNo
+              value={state.coinsuranceApplies}
+              onChange={(v) =>
+                dispatch({ type: "set", key: "coinsuranceApplies", value: v })
+              }
+            />
+          </Field>
+          <Field label={`${effectiveLabel(config, "coinsurance")} %`}>
             <input
               type="number"
               min={0}
@@ -61,13 +76,23 @@ export function TierRules({ config, state, dispatch }: Props) {
               }
             />
           </Field>
-        )}
+        </div>
+      )}
 
-        {fields.copay.enabled && (
+      {fields.copay.enabled && (
+        <div className="row">
           <Field
-            label={effectiveLabel(config, "copay")}
+            label="Copay applies?"
             required={fields.copay.required}
           >
+            <YesNo
+              value={state.copayApplies}
+              onChange={(v) =>
+                dispatch({ type: "set", key: "copayApplies", value: v })
+              }
+            />
+          </Field>
+          <Field label={effectiveLabel(config, "copay")}>
             <MoneyInput
               value={state.copayAmount}
               onChange={(v) =>
@@ -75,8 +100,79 @@ export function TierRules({ config, state, dispatch }: Props) {
               }
             />
           </Field>
-        )}
-      </div>
+        </div>
+      )}
+
+      {fields.copayRule.enabled && (
+        <Field
+          label={effectiveLabel(config, "copayRule")}
+          required={fields.copayRule.required}
+          helpText="Do not infer this from the copay amount alone. Use what the payer says."
+        >
+          <select
+            value={state.copayRule ?? ""}
+            onChange={(e) =>
+              dispatch({
+                type: "set",
+                key: "copayRule",
+                value:
+                  e.target.value === ""
+                    ? null
+                    : (e.target.value as CopayRule),
+              })
+            }
+          >
+            <option value="">— select —</option>
+            <option value="no_copay">No copay</option>
+            <option value="copay_only">Copay only</option>
+            <option value="copay_before_deductible">
+              Copay before deductible
+            </option>
+            <option value="copay_after_deductible">
+              Copay after deductible
+            </option>
+            <option value="copay_plus_coinsurance">
+              Copay plus coinsurance
+            </option>
+            <option value="copay_instead_of_coinsurance">
+              Copay instead of coinsurance
+            </option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </Field>
+      )}
+
+      {fields.serviceBucketApplicability.enabled && (
+        <div className="row">
+          <Field
+            label="Service applies to deductible bucket?"
+            helpText="If unsure and structure is Combined, default to Yes."
+          >
+            <YesNo
+              value={state.serviceAppliesToDeductibleBucket}
+              onChange={(v: TriState | null) =>
+                dispatch({
+                  type: "set",
+                  key: "serviceAppliesToDeductibleBucket",
+                  value: v,
+                })
+              }
+            />
+          </Field>
+          <Field label="Service applies to OOP max bucket?">
+            <YesNo
+              value={state.serviceAppliesToOOPBucket}
+              onChange={(v: TriState | null) =>
+                dispatch({
+                  type: "set",
+                  key: "serviceAppliesToOOPBucket",
+                  value: v,
+                })
+              }
+            />
+          </Field>
+        </div>
+      )}
     </Section>
   );
 }

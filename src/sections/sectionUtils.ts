@@ -29,13 +29,13 @@ export function isFieldComplete(
 ): boolean {
   switch (key) {
     case "network":
-      return state.network.trim() !== "";
+      return state.networkStatus !== null;
     case "deductible":
       return state.deductibleTotal !== null;
     case "oopMax":
       return state.oopMaxTotal !== null;
-    case "deductibleOopStructure":
-      return state.deductibleOopStructure !== null;
+    case "bucketStructure":
+      return state.bucketStructure !== null;
     case "patientStatus":
       return state.patientStatusId !== "";
     case "currentTier":
@@ -45,9 +45,22 @@ export function isFieldComplete(
     case "deductibleApplies":
       return state.deductibleApplies !== null;
     case "coinsurance":
-      return state.coinsurancePercent !== null;
+      return (
+        state.coinsuranceApplies !== null &&
+        (state.coinsuranceApplies !== "yes" ||
+          state.coinsurancePercent !== null)
+      );
     case "copay":
-      return state.copayAmount !== null;
+      return state.copayApplies !== null;
+    case "copayRule":
+      return state.copayRule !== null;
+    case "estimateBasis":
+      return state.estimateBasis !== null;
+    case "serviceBucketApplicability":
+      return (
+        state.serviceAppliesToDeductibleBucket !== null &&
+        state.serviceAppliesToOOPBucket !== null
+      );
     case "priorActivity":
       return true; // activity list is always considered "complete" (can be empty)
     case "currentBalance":

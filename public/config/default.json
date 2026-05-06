@@ -5,8 +5,9 @@
     "facilityName": "Acme Urgent Care",
     "primaryColor": "#0b6e4f",
     "accentColor": "#0a8a5f",
+    "billingPhone": "(555) 555-0100",
     "contactLine": "Billing questions: (555) 555-0100",
-    "footerDisclaimer": "This is an estimate of benefits, not a guarantee of payment. Final amounts depend on your insurance company's processing of the claim."
+    "footerDisclaimer": "This is an estimate of benefits, not a guarantee of payment. Final amounts depend on your insurance company's processing of the claim, including what they allow, what they consider covered, and any plan limits."
   },
   "vocabulary": {
     "patientNoun": "patient",
@@ -16,7 +17,9 @@
   "serviceTiers": [
     { "id": "office_visit", "label": "Office visit" },
     { "id": "urgent_visit", "label": "Urgent care visit" },
-    { "id": "procedure", "label": "In-office procedure" }
+    { "id": "procedure", "label": "In-office procedure" },
+    { "id": "lab", "label": "Lab" },
+    { "id": "imaging", "label": "Imaging" }
   ],
   "assistanceTypes": [
     {
@@ -42,17 +45,21 @@
     "network": { "enabled": true, "required": true },
     "deductible": { "enabled": true, "required": true },
     "oopMax": { "enabled": true, "required": true },
-    "deductibleOopStructure": { "enabled": true },
+    "bucketStructure": { "enabled": true, "required": true },
     "patientStatus": { "enabled": false },
     "currentTier": { "enabled": true, "required": true },
     "verifiedTier": { "enabled": false },
-    "deductibleApplies": { "enabled": true },
+    "deductibleApplies": { "enabled": true, "required": true },
     "coinsurance": { "enabled": true },
     "copay": { "enabled": true },
+    "copayRule": { "enabled": true },
+    "estimateBasis": { "enabled": true },
+    "serviceBucketApplicability": { "enabled": true },
     "priorActivity": { "enabled": false },
-    "currentBalance": { "enabled": true }
+    "currentBalance": { "enabled": false }
   },
   "sections": {
+    "estimateBasis": { "enabled": true },
     "financialActivity": { "enabled": false }
   },
   "finalCheck": [
@@ -60,10 +67,6 @@
     { "id": "benefits_checked", "label": "Benefits verified with payer" },
     { "id": "patient_briefed", "label": "Patient briefed on estimated cost" }
   ],
-  "templates": {
-    "staffSummary": "STAFF SUMMARY — {{facility.facilityName}}\nGenerated {{generatedAt}}\n\nNetwork: {{form.network}}\nDeductible: {{money form.deductibleTotal}} total / {{money form.deductibleMet}} met / {{money form.deductibleRemaining}} remaining\nOOP max:    {{money form.oopMaxTotal}} total / {{money form.oopMet}} met / {{money form.oopRemaining}} remaining\n{{#if form.deductibleOopStructure}}Structure: {{form.deductibleOopStructure}}\n{{/if}}\n{{#if form.currentTier}}Current visit type: {{form.currentTier.label}}\n{{/if}}{{#if form.verifiedTier}}Verified with payer: {{form.verifiedTier.label}}\n{{/if}}{{#if form.crossTierWarning}}** Cross-tier mismatch — verify before billing **\n{{/if}}\nDeductible applies: {{form.deductibleApplies}}\nCoinsurance: {{pct form.coinsurancePercent}}\nCopay: {{money form.copayAmount}}\n{{#if form.currentBalance}}Current balance: {{money form.currentBalance}}\n{{/if}}{{#if form.oopSatisfied}}** OOP MAX SATISFIED **\n{{/if}}",
-    "patientExplanation": "{{facility.facilityName}}\nGenerated {{generatedAt}}\n\nHi — here's a quick summary of your insurance for this {{t.episodeNoun}}.\n\nYour plan ({{form.network}}):\n- Deductible: {{money form.deductibleTotal}} total, {{money form.deductibleRemaining}} left to meet\n- Out-of-pocket max: {{money form.oopMaxTotal}} total, {{money form.oopRemaining}} left\n\n{{#if form.currentTier}}For your {{t.serviceNoun}} ({{form.currentTier.label}}):\n{{/if}}{{#if form.deductibleApplies}}- Deductible applies: {{form.deductibleApplies}}\n{{/if}}{{#if form.coinsurancePercent}}- Your share after deductible: {{pct form.coinsurancePercent}}\n{{/if}}{{#if form.copayAmount}}- Copay: {{money form.copayAmount}} per {{t.episodeNoun}}\n{{/if}}\n{{#if form.oopSatisfied}}You've met your out-of-pocket max for the year — covered services should be paid at 100% by your plan.\n{{/if}}\n---\n{{facility.footerDisclaimer}}\n{{#if facility.contactLine}}{{facility.contactLine}}{{/if}}\n"
-  },
   "behavior": {
     "idleClearMinutes": 15
   }
