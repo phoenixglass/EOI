@@ -545,6 +545,91 @@ describe("calculateEstimate — acceptance scenarios", () => {
     expect(r.finalPatientEstimate).toBe(0);
   });
 
+  // OON copay-suppression: copays are an in-network construct only.
+  it("Test 15: OON visit with stale copay state → copay ignored, coinsurance only", () => {
+    const r = calculateEstimate(
+      baseState({
+        networkStatus: "oon",
+        deductibleTotal: 2000,
+        deductibleMet: 2000,
+        oopMaxTotal: 5000,
+        oopMet: 1000,
+        bucketStructure: "combined",
+        deductibleApplies: "yes",
+        coinsuranceApplies: "yes",
+        coinsurancePercent: 30,
+        // Stale form state from a prior INN plan — must not affect the estimate.
+        copayApplies: "yes",
+        copayAmount: 75,
+        copayRule: "copay_plus_coinsurance",
+        estimatedAllowedAmount: 200,
+        estimateBasis: "allowed_amount",
+        serviceAppliesToDeductibleBucket: "yes",
+        serviceAppliesToOOPBucket: "yes",
+      }),
+    );
+    expect(r.canEstimate).toBe(true);
+    expect(r.copayAmountUsed).toBe(0);
+    expect(r.coinsuranceAmount).toBe(60);
+    expect(r.finalPatientEstimate).toBe(60);
+  });
+
+  it("Test 16: OON, deductible not met → full allowed amount, no coinsurance, no copay", () => {
+    const r = calculateEstimate(
+      baseState({
+        networkStatus: "oon",
+        deductibleTotal: 2000,
+        deductibleMet: 500,
+        oopMaxTotal: 5000,
+        oopMet: 500,
+        bucketStructure: "combined",
+        deductibleApplies: "yes",
+        coinsuranceApplies: "yes",
+        coinsurancePercent: 30,
+        copayApplies: "yes",
+        copayAmount: 50,
+        copayRule: "copay_only",
+        estimatedAllowedAmount: 400,
+        estimateBasis: "allowed_amount",
+        serviceAppliesToDeductibleBucket: "yes",
+        serviceAppliesToOOPBucket: "yes",
+      }),
+    );
+    expect(r.canEstimate).toBe(true);
+    expect(r.deductiblePortion).toBe(400);
+    expect(r.amountAfterDeductible).toBe(0);
+    expect(r.coinsuranceAmount).toBe(0);
+    expect(r.copayAmountUsed).toBe(0);
+    expect(r.finalPatientEstimate).toBe(400);
+  });
+
+  it("Test 17: OON, unknown copay rule → no copay_rule_unknown blocker (copay ignored)", () => {
+    const r = calculateEstimate(
+      baseState({
+        networkStatus: "oon",
+        deductibleTotal: 2000,
+        deductibleMet: 2000,
+        oopMaxTotal: 5000,
+        oopMet: 0,
+        bucketStructure: "combined",
+        deductibleApplies: "yes",
+        coinsuranceApplies: "yes",
+        coinsurancePercent: 20,
+        copayApplies: "yes",
+        copayAmount: 40,
+        copayRule: "unknown",
+        estimatedAllowedAmount: 200,
+        estimateBasis: "allowed_amount",
+        serviceAppliesToDeductibleBucket: "yes",
+        serviceAppliesToOOPBucket: "yes",
+      }),
+    );
+    expect(r.canEstimate).toBe(true);
+    expect(r.cannotEstimateReasons).not.toContain("copay_rule_unknown");
+    expect(r.coinsuranceAmount).toBe(40);
+    expect(r.finalPatientEstimate).toBe(40);
+  });
+
   it("Test 10b: OON, no basis selected → cannot estimate", () => {
     const r = calculateEstimate(
       baseState({

@@ -30,6 +30,8 @@ export function TierRules({ config, state, dispatch }: Props) {
     "copayRule",
     "serviceBucketApplicability",
   ]);
+  const isOON = state.networkStatus === "oon";
+  const copayLockedByOON = isOON;
 
   return (
     <Section title={title} filled={progress.filled} total={progress.total}>
@@ -84,9 +86,15 @@ export function TierRules({ config, state, dispatch }: Props) {
           <Field
             label="Copay applies?"
             required={fields.copay.required}
+            helpText={
+              copayLockedByOON
+                ? "Out-of-network plans bill coinsurance only — copay is not collected."
+                : undefined
+            }
           >
             <YesNo
-              value={state.copayApplies}
+              value={copayLockedByOON ? "no" : state.copayApplies}
+              disabled={copayLockedByOON}
               onChange={(v) => {
                 dispatch({ type: "set", key: "copayApplies", value: v });
                 // When copay does not apply, force-clear amount/rule. The
@@ -105,11 +113,11 @@ export function TierRules({ config, state, dispatch }: Props) {
           </Field>
           <Field label={effectiveLabel(config, "copay")}>
             <MoneyInput
-              value={state.copayAmount}
+              value={copayLockedByOON ? null : state.copayAmount}
               onChange={(v) =>
                 dispatch({ type: "set", key: "copayAmount", value: v })
               }
-              disabled={state.copayApplies === "no"}
+              disabled={copayLockedByOON || state.copayApplies === "no"}
             />
           </Field>
         </div>
@@ -120,14 +128,16 @@ export function TierRules({ config, state, dispatch }: Props) {
           label={effectiveLabel(config, "copayRule")}
           required={fields.copayRule.required}
           helpText={
-            state.copayApplies === "no"
-              ? "Copay does not apply to this visit, so the copay rule is locked to “No copay”."
-              : "Do not infer this from the copay amount alone. Use what the payer says."
+            copayLockedByOON
+              ? "Out-of-network plans bill coinsurance only — copay rule is locked to “No copay”."
+              : state.copayApplies === "no"
+                ? "Copay does not apply to this visit, so the copay rule is locked to “No copay”."
+                : "Do not infer this from the copay amount alone. Use what the payer says."
           }
         >
           <select
-            value={state.copayRule ?? ""}
-            disabled={state.copayApplies === "no"}
+            value={copayLockedByOON ? "no_copay" : (state.copayRule ?? "")}
+            disabled={copayLockedByOON || state.copayApplies === "no"}
             onChange={(e) =>
               dispatch({
                 type: "set",

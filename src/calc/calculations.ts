@@ -179,6 +179,14 @@ function deductibleAppliesForService(state: FormState): boolean {
   return true;
 }
 
+// Out-of-network plans bill coinsurance only — copays are an in-network-only
+// construct. Force-clear any copay state when the visit is OON so stale
+// dropdown selections from a prior INN plan can't leak into the estimate.
+function copayAppliesForService(state: FormState): boolean {
+  if (state.networkStatus === "oon") return false;
+  return state.copayApplies === "yes";
+}
+
 // IMPORTANT: OOP max met is NOT a universal override.
 //
 // The OOP max only limits patient responsibility when ALL of the following are true:
@@ -285,10 +293,14 @@ export function calculateEstimate(state: FormState): EstimateResult {
   if (state.deductibleApplies === "unknown" || state.deductibleApplies === null) {
     result.cannotEstimateReasons.push("deductible_applicability_unknown");
   }
-  if (state.copayApplies === "yes" && (state.copayRule === "unknown" || state.copayRule === null)) {
+  const copayInPlay = copayAppliesForService(state);
+  if (copayInPlay && (state.copayRule === "unknown" || state.copayRule === null)) {
     result.cannotEstimateReasons.push("copay_rule_unknown");
   }
-  if (state.coinsuranceApplies === "unknown" && state.copayRule !== "copay_only") {
+  if (
+    state.coinsuranceApplies === "unknown" &&
+    !(copayInPlay && state.copayRule === "copay_only")
+  ) {
     result.cannotEstimateReasons.push("coinsurance_applicability_unknown");
   }
   if (
@@ -348,10 +360,12 @@ export function calculateEstimate(state: FormState): EstimateResult {
   }
 
   // Step 6: combine with copay rule.
-  const rule: CopayRule =
-    state.copayRule ??
-    (state.copayApplies === "yes" ? "unknown" : "no_copay");
-  const copay = nz(state.copayAmount);
+  // OON plans never bill copays, so any rule/amount on the form is ignored
+  // and the visit is treated as coinsurance-only.
+  const rule: CopayRule = copayInPlay
+    ? state.copayRule ?? "unknown"
+    : "no_copay";
+  const copay = copayInPlay ? nz(state.copayAmount) : 0;
 
   switch (rule) {
     case "no_copay": {
