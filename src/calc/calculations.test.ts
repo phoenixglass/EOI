@@ -441,6 +441,110 @@ describe("calculateEstimate — acceptance scenarios", () => {
     expect(r.calculationBasisLabel).toBe("provider charge");
   });
 
+  // Separate-bucket scenarios: OOP max met must NOT be a universal override.
+  it("Test 11: separate buckets, OOP met but service does not apply to OOP → deductible still applies", () => {
+    const r = calculateEstimate(
+      baseState({
+        networkStatus: "oon",
+        deductibleTotal: 2000,
+        deductibleMet: 0,
+        oopMaxTotal: 3500,
+        oopMet: 3500,
+        bucketStructure: "separate",
+        deductibleApplies: "yes",
+        coinsuranceApplies: "yes",
+        coinsurancePercent: null,
+        copayApplies: "no",
+        copayRule: "no_copay",
+        estimatedAllowedAmount: 750,
+        estimateBasis: "allowed_amount",
+        serviceAppliesToDeductibleBucket: "yes",
+        serviceAppliesToOOPBucket: "no",
+      }),
+    );
+    expect(r.canEstimate).toBe(true);
+    expect(r.oopMaxIsMet).toBe(true);
+    expect(r.oopMaxOverrideApplied).toBe(false);
+    expect(r.oopCapApplied).toBe(false);
+    expect(r.deductiblePortion).toBe(750);
+    expect(r.amountAfterDeductible).toBe(0);
+    expect(r.finalPatientEstimate).toBe(750);
+    expect(r.cannotEstimateReasons).not.toContain("coinsurance_percent_unknown");
+  });
+
+  it("Test 12: coinsurance percent missing but visit fits inside deductible → still estimable", () => {
+    const r = calculateEstimate(
+      baseState({
+        deductibleTotal: 2000,
+        deductibleMet: 0,
+        oopMaxTotal: 5000,
+        oopMet: 0,
+        bucketStructure: "combined",
+        deductibleApplies: "yes",
+        coinsuranceApplies: "yes",
+        coinsurancePercent: null,
+        copayApplies: "no",
+        copayRule: "no_copay",
+        estimatedAllowedAmount: 750,
+        estimateBasis: "allowed_amount",
+        serviceAppliesToDeductibleBucket: "yes",
+        serviceAppliesToOOPBucket: "yes",
+      }),
+    );
+    expect(r.canEstimate).toBe(true);
+    expect(r.deductiblePortion).toBe(750);
+    expect(r.amountAfterDeductible).toBe(0);
+    expect(r.finalPatientEstimate).toBe(750);
+  });
+
+  it("Test 13: coinsurance percent missing AND visit crosses deductible → cannot estimate", () => {
+    const r = calculateEstimate(
+      baseState({
+        deductibleTotal: 500,
+        deductibleMet: 0,
+        oopMaxTotal: 5000,
+        oopMet: 0,
+        bucketStructure: "combined",
+        deductibleApplies: "yes",
+        coinsuranceApplies: "yes",
+        coinsurancePercent: null,
+        copayApplies: "no",
+        copayRule: "no_copay",
+        estimatedAllowedAmount: 750,
+        estimateBasis: "allowed_amount",
+        serviceAppliesToDeductibleBucket: "yes",
+        serviceAppliesToOOPBucket: "yes",
+      }),
+    );
+    expect(r.canEstimate).toBe(false);
+    expect(r.cannotEstimateReasons).toContain("coinsurance_percent_unknown");
+  });
+
+  it("Test 14: separate buckets, OOP met, service applies only to OOP bucket → override fires", () => {
+    // Sanity check that the OOP override still works when the service truly
+    // accumulates against the OOP bucket.
+    const r = calculateEstimate(
+      baseState({
+        deductibleTotal: 2000,
+        deductibleMet: 0,
+        oopMaxTotal: 3500,
+        oopMet: 3500,
+        bucketStructure: "separate",
+        deductibleApplies: "no",
+        coinsuranceApplies: "yes",
+        coinsurancePercent: 20,
+        copayApplies: "no",
+        copayRule: "no_copay",
+        estimatedAllowedAmount: 750,
+        estimateBasis: "allowed_amount",
+        serviceAppliesToDeductibleBucket: "no",
+        serviceAppliesToOOPBucket: "yes",
+      }),
+    );
+    expect(r.oopMaxOverrideApplied).toBe(true);
+    expect(r.finalPatientEstimate).toBe(0);
+  });
+
   it("Test 10b: OON, no basis selected → cannot estimate", () => {
     const r = calculateEstimate(
       baseState({
